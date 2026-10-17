@@ -1,0 +1,451 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "=Sos el asesor de ventas de una mueblería en Parque Chas, Buenos Aires. Atendés consultas por WhatsApp con un tono amable, profesional y porteño (usá voseo natural: \"mirá\", \"fijate\", \"te comento\", \"tenemos\").\nFECHA ACTUAL DE REFERENCIA:\nHoy es {{ $now.format('cccc, dd MMMM yyyy, HH:mm') }}. Usá esta fecha actual para calcular con precisión los días relativos (como \"este viernes\", \"mañana\", \"el próximo lunes\").\n\nREGLAS DE ATENCIÓN Y CATÁLOGO:\n1. Para responder sobre muebles, precios, stock o medidas, consultá SIEMPRE la herramienta del catálogo.\n2. NUNCA menciones códigos internos como \"ID\" o \"MUE-XXX\". El cliente solo debe ver el nombre comercial del producto.\n3. Al presentar un producto, incluí de forma clara:\n   - Nombre\n   - Precio en dólares/pesos (especificado en el catalogo)\n   - Dimensiones\n   - Stock disponible\n4. Solo ofrecé artículos con stock mayor a cero. Si piden algo que no está en la base, aclará con amabilidad que no trabajan ese modelo.\n5. - NUNCA menciones que usás \"herramientas\", \"scripts\" ni \"bases de datos\" en tus respuestas. Respondé siempre en primera persona como el equipo de la mueblería \n\nCOTIZACIÓN DE ENVÍOS:\n- Cuando el cliente indique un barrio, localidad o consulte por costos de entrega, usá SIEMPRE la herramienta de cálculo de envíos.\n- Brindale el desglose: precio del mueble en USD, costo de envío en USD y la suma total final en USD.\n\nREGLAS ESTRICTAS DE AGENDAMIENTO (GOOGLE CALENDAR):\n1. NUNCA confirmes que una visita está agendada a menos que hayas ejecutado con éxito la herramienta de Google Calendar en ese mismo turno. Está terminantemente prohibido decir \"ya está agendado\" sin haber creado el evento real.\n2. Si el cliente acepta un horario o confirma una cita (ejemplo: \"ok a las 20hs\", \"dale el viernes a las 16\"):\n   - Ejecutá INMEDIATAMENTE la herramienta para crear el evento en Google Calendar.\n   - Calculá la fecha y hora usando la FECHA ACTUAL DE REFERENCIA.\n   - Pasá obligatoriamente los parámetros en formato ISO 8601 estricto:\n     * start: YYYY-MM-DDTHH:mm:ss\n     * end: YYYY-MM-DDTHH:mm:ss (sumá 1 hora respecto al inicio)\n     * summary: \"Visita Showroom - Cliente\"\n3. Solo después de recibir la respuesta exitosa del calendario, confirmale al cliente indicando el día exacto, la hora y la dirección en Parque Chas.\n4. No intentes buscar eventos por ID ni usar herramientas de lectura de calendario que no tengas disponibles."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        720,
+        -128
+      ],
+      "id": "ef164921-b23b-4671-aaf6-6fafa8472440",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        544,
+        112
+      ],
+      "id": "cf2f8854-742e-497b-84a6-3805e40cb133",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "asZ42uCLG8GQLI5O",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        672,
+        112
+      ],
+      "id": "c6c99c17-0577-4fe6-9a26-9eb0364b8d22",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Usá esta herramienta para consultar el catálogo completo de la mueblería: nombre de productos, precios, dimensiones y stock disponible.\n",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1BOKXKWsH5aGEuOupqw11PNnWlzf1qOlVdsLHO0DYzXI/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BOKXKWsH5aGEuOupqw11PNnWlzf1qOlVdsLHO0DYzXI/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        800,
+        112
+      ],
+      "id": "14f7d7f1-de7d-44fe-89fe-c2f184e3fadb",
+      "name": "Get row(s) in sheet in Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "zRr6Xf6DXadkX0dN",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "description": "Usá esta herramienta para calcular el costo de envío y flete cuando el cliente indique su barrio, localidad o dirección. Requiere el nombre de la zona o barrio.",
+        "jsCode": "// Usar query tal como indica n8n\nconst direccion = (typeof query !== 'undefined' ? String(query) : '').toLowerCase();\n\nconst barriosCaba = [\n  'parque chas', 'villa urquiza', 'agronomia', 'belgrano', 'villa ortuzar',\n  'chacarita', 'paternal', 'villa pueyrredon', 'saavedra', 'palermo',\n  'caballito', 'caba', 'capital', 'capital federal'\n];\n\nconst tarifaCabaUsd = 15.0;\nconst tarifaGbaUsd = 35.0;\n\nconst esCaba = barriosCaba.some(barrio => direccion.includes(barrio));\n\nconst resultado = {\n  direccion_recibida: direccion,\n  zona: esCaba ? 'CABA' : 'GBA / Provincia',\n  costo_envio_usd: esCaba ? tarifaCabaUsd : tarifaGbaUsd,\n  detalle: esCaba ? 'Tarifa plana local CABA.' : 'Tarifa base Gran Buenos Aires.'\n};\n\nreturn JSON.stringify(resultado);"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        928,
+        112
+      ],
+      "id": "f6b21b43-26ff-4f61-87de-3e65f8036608",
+      "name": "calcular_envio"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Usá esta herramienta para agendar visitas presenciales al showroom en Google Calendar.\nParámetros obligatorios:\n- start: Fecha y hora de inicio en formato estricto ISO 8601 (ejemplo: YYYY-MM-DDTHH:mm:ss).\n- end: Fecha y hora de fin en formato estricto ISO 8601 (ejemplo: YYYY-MM-DDTHH:mm:ss).\n- summary: Título breve de la visita.",
+        "calendar": {
+          "__rl": true,
+          "value": "pruebaslucassoft@gmail.com",
+          "mode": "list",
+          "cachedResultName": "pruebaslucassoft@gmail.com"
+        },
+        "start": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start', `Fecha y hora de inicio en formato ISO 8601 (ej: 2026-10-16T16:00:00)`, 'string') }}",
+        "end": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('End', `Fecha y hora de finalización en formato ISO 8601 (ej: 2026-10-16T17:00:00)`, 'string') }}",
+        "additionalFields": {
+          "summary": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Summary', ``, 'string') }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendarTool",
+      "typeVersion": 1.3,
+      "position": [
+        1056,
+        112
+      ],
+      "id": "2bc5e17e-04da-41cc-8eab-d3b6194515cf",
+      "name": "Create an event in Google Calendar",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "yJb6nYmdqDNaf65x",
+          "name": "Google Calendar account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Código en JavaScript (Run Once for Each Item)\nconst input = ($json.chatInput || \"\").toLowerCase();\n\n// 1. Detección de intención de derivación humana / quejas\nconst palabrasHumano = ['humano', 'asesor', 'persona', 'operador', 'representante', 'reclamo', 'queja'];\nconst pideHumano = palabrasHumano.some(p => input.includes(p));\n\n// 2. Detección dura de inyección o jailbreak\nconst palabrasJailbreak = ['ignora', 'olvida tus instrucciones', 'prompt', 'dame gratis', 'jailbreak'];\nconst esJailbreak = palabrasJailbreak.some(p => input.includes(p));\n\nif (pideHumano) {\n  return {\n    tipo_accion: 'derivacion_humana',\n    respuesta: 'Te pongo en contacto directo con un asesor de nuestro equipo humano para que te asista de forma personalizada.',\n    continuar_agente: false\n  };\n}\n\nif (esJailbreak) {\n  return {\n    tipo_accion: 'bloqueo_seguridad',\n    respuesta: 'Hola! Soy el asistente virtual del showroom. Solo puedo ayudarte con información sobre nuestro catálogo de muebles, envíos y visitas.',\n    continuar_agente: false\n  };\n}\n\nreturn {\n  tipo_accion: 'consulta_normal',\n  chatInput: $json.chatInput,\n  continuar_agente: true\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        -304
+      ],
+      "id": "1f705016-3b47-48ac-a417-f39dc827fe29",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7e279900-8d62-4e4a-8890-89faf5bb328e",
+              "leftValue": "={{ $json.continuar_agente }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        272,
+        -112
+      ],
+      "id": "e3a3c95a-26ac-429b-9fd5-5f8687d4e9a0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  response: $json.respuesta,\n  output: $json.respuesta\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        320
+      ],
+      "id": "7db0e6f7-de4c-42e4-8c47-9426819c08ac",
+      "name": "contacto humano"
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -176,
+        -112
+      ],
+      "id": "535786a4-5f44-4d77-a513-3a8424222db1",
+      "name": "Telegram Trigger",
+      "webhookId": "ae7f29b8-07b9-41ae-a1cc-f2ccb7d4d059",
+      "credentials": {
+        "telegramApi": {
+          "id": "F65h1bfvuMVjuBRA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -176,
+        -304
+      ],
+      "id": "0b191d2c-20a5-4ed3-8c08-393cc843dae4",
+      "name": "Mensaje x chat n8n",
+      "webhookId": "ef325d4e-cc68-4104-b9de-5498144489e1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        320
+      ],
+      "id": "5adc2e6e-02de-4481-a6c2-6d72d94147ee",
+      "name": "Send a text message",
+      "webhookId": "eafec10c-3fbb-4c46-96ca-bbfe87b7515b",
+      "credentials": {
+        "telegramApi": {
+          "id": "F65h1bfvuMVjuBRA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const input = ($json.message?.text || \"\").toLowerCase();\nconst chatId = $json.message?.chat?.id;\n\n// Detección de quejas o derivación\nconst palabrasHumano = ['humano', 'asesor', 'persona', 'operador', 'representante', 'reclamo', 'queja'];\nconst pideHumano = palabrasHumano.some(p => input.includes(p));\n\n// Detección de jailbreaks\nconst palabrasJailbreak = ['ignora', 'olvida tus instrucciones', 'prompt', 'dame gratis', 'jailbreak'];\nconst esJailbreak = palabrasJailbreak.some(p => input.includes(p));\n\nif (pideHumano) {\n  return {\n    tipo_accion: 'derivacion_humana',\n    respuesta: 'Te pongo en contacto directo con un asesor de nuestro equipo humano para que te asista de forma personalizada.',\n    chatId: chatId,\n    continuar_agente: false\n  };\n}\n\nif (esJailbreak) {\n  return {\n    tipo_accion: 'bloqueo_seguridad',\n    respuesta: 'Hola! Soy el asistente virtual del showroom. Solo puedo ayudarte con información sobre nuestro catálogo de muebles, envíos y visitas.',\n    chatId: chatId,\n    continuar_agente: false\n  };\n}\n\nreturn {\n  tipo_accion: 'consulta_normal',\n  chatInput: $json.message?.text || \"\",\n  chatId: chatId,\n  continuar_agente: true\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        -112
+      ],
+      "id": "587da5fd-98eb-401a-a2c5-c4367a6bc2f4",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1056,
+        -128
+      ],
+      "id": "74d25983-4c33-40f6-a2a0-ddcf9f4c2f49",
+      "name": "Send a text message1",
+      "webhookId": "eafec10c-3fbb-4c46-96ca-bbfe87b7515b",
+      "credentials": {
+        "telegramApi": {
+          "id": "F65h1bfvuMVjuBRA",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        240,
+        -288
+      ],
+      "id": "bdea2c60-7f51-4161-b653-e1c1cd3d6333",
+      "name": "Simple Memory1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calcular_envio": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an event in Google Calendar": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "contacto humano",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje x chat n8n": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "contacto humano": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "88da69d1-5aa9-42ba-a738-8844e377626d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "7f689e243fef5750f09f6619c7c92b9c6d8cf8f989cf245d043dfa6a43d64c0d"
+  },
+  "nodeGroups": [],
+  "id": "n9Yy16prDSeP6Vbn",
+  "tags": []
+}
